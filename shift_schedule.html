@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>교대근무 최적 일정표</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f7f7f5; color: #37352f; min-height: 100vh; padding: 24px 16px; }
+  .container { max-width: 780px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+  .subtitle { font-size: 13px; color: #787774; margin-bottom: 24px; }
+  .tabs { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+  .tab { padding: 6px 16px; border-radius: 6px; border: 1px solid #e3e2e0; background: #fff; font-size: 13px; cursor: pointer; color: #787774; transition: all .15s; font-family: inherit; font-weight: 500; }
+  .tab.active { background: #2383e2; color: #fff; border-color: #2383e2; }
+  .tab:hover:not(.active) { background: #f1f1ef; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .badge-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+  .badge { font-size: 11px; padding: 3px 10px; border-radius: 20px; font-weight: 600; }
+  .b-sleep  { background: #e8e7fb; color: #5b50c7; }
+  .b-sleep2 { background: #d6d3f7; color: #3c3489; }
+  .b-run    { background: #ddf2c8; color: #2f6010; }
+  .b-swim   { background: #c8ece1; color: #085041; }
+  .b-lift   { background: #fde9c0; color: #7a4510; }
+  .timeline { display: flex; flex-direction: column; gap: 3px; }
+  .row { display: flex; align-items: stretch; border-radius: 8px; overflow: hidden; border: 1px solid #e9e9e7; }
+  .time-col { min-width: 92px; font-size: 11px; color: #787774; padding: 9px 10px; display: flex; align-items: center; background: #f7f7f5; border-right: 1px solid #e9e9e7; flex-shrink: 0; line-height: 1.3; }
+  .block { flex: 1; padding: 9px 12px; font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 6px; }
+  .note { font-size: 11px; font-weight: 400; opacity: .7; margin-left: auto; flex-shrink: 0; }
+  .sleep  { background: #5b50c7; color: #f0effe; }
+  .sleep2 { background: #8c85d9; color: #f0effe; }
+  .work   { background: #2383e2; color: #e8f2fd; }
+  .run    { background: #3b6d11; color: #eaf3de; }
+  .swim   { background: #0f6e56; color: #e1f5ee; }
+  .lift   { background: #b45309; color: #fef3c7; }
+  .meal   { background: #f7f7f5; color: #37352f; }
+  .rest   { background: #f7f7f5; color: #787774; }
+  .prep   { background: #f1f1ef; color: #787774; }
+  .warn { background: #fff8e6; color: #9b6c00; font-size: 12px; padding: 8px 12px; border-radius: 8px; border: 1px solid #f5d97a; margin-top: 8px; line-height: 1.5; }
+  .tip  { background: #f7f7f5; border-left: 3px solid #2383e2; border-radius: 0 8px 8px 0; padding: 8px 12px; font-size: 12px; color: #787774; margin-top: 4px; line-height: 1.5; }
+  .section-label { font-size: 11px; font-weight: 600; color: #787774; text-transform: uppercase; letter-spacing: .06em; margin: 16px 0 6px; }
+  .week-grid { display: grid; grid-template-columns: 72px repeat(7, minmax(0,1fr)); gap: 1px; background: #e3e2e0; border-radius: 8px; overflow: hidden; font-size: 11px; }
+  .wg-cell { padding: 7px 3px; text-align: center; background: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+  .wg-head { background: #f7f7f5; font-weight: 600; color: #787774; }
+  .wg-label { background: #f7f7f5; color: #787774; font-weight: 500; }
+  .pill { font-size: 10px; padding: 2px 5px; border-radius: 10px; font-weight: 600; line-height: 1.3; }
+  .p-run  { background: #ddf2c8; color: #2f6010; }
+  .p-swim { background: #c8ece1; color: #085041; }
+  .p-lift { background: #fde9c0; color: #7a4510; }
+  .p-rest { background: #f1f1ef; color: #787774; }
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+  .stat-card { background: #fff; border: 1px solid #e3e2e0; border-radius: 8px; padding: 10px 12px; }
+  .stat-val { font-size: 22px; font-weight: 700; color: #37352f; line-height: 1.2; }
+  .stat-lbl { font-size: 11px; color: #787774; margin-top: 2px; }
+  @media (max-width: 480px) {
+    .time-col { min-width: 72px; font-size: 10px; }
+    .block { font-size: 12px; }
+    .note { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>교대근무 최적 일정표</h1>
+  <p class="subtitle">3교대 (A·B·C조) 기준 — 수면 8시간 + 운동 루틴 통합</p>
+
+  <div class="tabs">
+    <button class="tab active" onclick="show('a',this)">☀️ A조 07~15시</button>
+    <button class="tab" onclick="show('b',this)">🌤 B조 15~23시</button>
+    <button class="tab" onclick="show('c',this)">🌙 C조 23~07시</button>
+    <button class="tab" onclick="show('week',this)">📅 주간 운동</button>
+  </div>
+
+  <!-- A조 -->
+  <div id="panel-a" class="panel active">
+    <div class="badge-row">
+      <span class="badge b-sleep">수면 8시간</span>
+      <span class="badge b-run">러닝 5km</span>
+      <span class="badge b-lift">근력 30분</span>
+    </div>
+    <div class="timeline">
+      <div class="row"><div class="time-col">21:30–05:30</div><div class="block sleep">😴 수면 <span class="note">8시간</span></div></div>
+      <div class="row"><div class="time-col">05:30–07:00</div><div class="block prep">🚿 기상 · 출근 준비 · 이동 <span class="note">1시간 30분</span></div></div>
+      <div class="row"><div class="time-col">07:00–15:00</div><div class="block work">🏢 A조 근무 <span class="note">8시간</span></div></div>
+      <div class="row"><div class="time-col">15:00–15:30</div><div class="block prep">🚌 퇴근 이동 <span class="note">30분</span></div></div>
+      <div class="row"><div class="time-col">15:30–17:00</div><div class="block rest">☕ 휴식 · 자유시간</div></div>
+      <div class="row"><div class="time-col">17:00–18:30</div><div class="block run">🏃 러닝 5km + 🏋 근력 30분 <span class="note">총 60분</span></div></div>
+      <div class="row"><div class="time-col">18:30–19:30</div><div class="block meal">🍽 저녁 식사 <span class="note">수면 2시간 전 마감</span></div></div>
+      <div class="row"><div class="time-col">19:30–21:30</div><div class="block rest">🛁 소화 · 샤워 · 취침 준비</div></div>
+    </div>
+    <div class="warn">⚠️ 기상 후 1~2분 앉아서 천천히 일어나세요. 저혈압 기립성 어지럼증 예방</div>
+    <div class="tip">💊 기상 후 첫 식사와 함께 전립선약(알파차단제) 복용</div>
+  </div>
+
+  <!-- B조 -->
+  <div id="panel-b" class="panel">
+    <div class="badge-row">
+      <span class="badge b-sleep">수면 7.5시간 (연속)</span>
+      <span class="badge b-run">러닝 5km</span>
+      <span class="badge b-lift">근력 30분</span>
+    </div>
+    <div class="timeline">
+      <div class="row"><div class="time-col">00:00–07:30</div><div class="block sleep">😴 수면 <span class="note">7.5시간 연속</span></div></div>
+      <div class="row"><div class="time-col">07:30–08:00</div><div class="block prep">🌅 기상 · 운동 준비</div></div>
+      <div class="row"><div class="time-col">08:00–09:30</div><div class="block run">🏃 러닝 5km + 🏋 근력 30분 <span class="note">총 60분</span></div></div>
+      <div class="row"><div class="time-col">09:30–10:30</div><div class="block meal">🍳 아침 겸 점심 식사 <span class="note">약 복용</span></div></div>
+      <div class="row"><div class="time-col">10:30–13:00</div><div class="block rest">☕ 소화 · 자유시간</div></div>
+      <div class="row"><div class="time-col">13:00–13:30</div><div class="block prep">🎒 출근 준비</div></div>
+      <div class="row"><div class="time-col">13:30–15:00</div><div class="block prep">🚌 출근 이동 <span class="note">1시간 30분</span></div></div>
+      <div class="row"><div class="time-col">15:00–23:00</div><div class="block work">🏢 B조 근무 <span class="note">8시간</span></div></div>
+      <div class="row"><div class="time-col">22:00 전</div><div class="block meal">🍱 근무 중 저녁 식사 <span class="note">수면 2시간 전 마감</span></div></div>
+      <div class="row"><div class="time-col">23:00–23:30</div><div class="block prep">🚌 퇴근 이동</div></div>
+      <div class="row"><div class="time-col">23:30–00:00</div><div class="block rest">🛁 샤워 · 취침 준비</div></div>
+    </div>
+    <div class="warn">⚠️ 퇴근 후 교감신경 흥분 상태. 스마트폰 줄이고 조명 낮춰 수면 유도</div>
+    <div class="tip">💊 09:30 식사 후 약 복용 (기상 후 첫 식사 기준으로 고정)</div>
+  </div>
+
+  <!-- C조 -->
+  <div id="panel-c" class="panel">
+    <div class="badge-row">
+      <span class="badge b-sleep">본잠 6.5h (08:30~15:00)</span>
+      <span class="badge b-sleep2">분할수면 1.5h (20:00~21:30)</span>
+      <span class="badge b-run">러닝 5km</span>
+    </div>
+    <div class="timeline">
+      <div class="row"><div class="time-col">23:00–07:00</div><div class="block work">🏢 C조 근무 <span class="note">8시간</span></div></div>
+      <div class="row"><div class="time-col">06:00 전</div><div class="block meal">🍱 근무 중 가벼운 식사 <span class="note">귀가 후 식사 금지</span></div></div>
+      <div class="row"><div class="time-col">07:00–07:30</div><div class="block prep">🚌 퇴근 이동 <span class="note">선글라스 필수</span></div></div>
+      <div class="row"><div class="time-col">07:30–08:30</div><div class="block rest">🛁 샤워 · 암막커튼 · 취침 준비</div></div>
+      <div class="row"><div class="time-col">08:30–15:00</div><div class="block sleep">😴 본잠 <span class="note">6.5시간</span></div></div>
+      <div class="row"><div class="time-col">15:00–15:30</div><div class="block prep">🌤 기상 · 준비</div></div>
+      <div class="row"><div class="time-col">15:30–16:00</div><div class="block meal">🍽 기상 후 첫 식사 <span class="note">약 복용</span></div></div>
+      <div class="row"><div class="time-col">16:00–17:30</div><div class="block run">🏃 러닝 5km + 🏋 근력 30분 <span class="note">총 60분</span></div></div>
+      <div class="row"><div class="time-col">17:30–18:30</div><div class="block rest">☕ 휴식</div></div>
+      <div class="row"><div class="time-col">18:30–19:30</div><div class="block meal">🍽 저녁 식사 <span class="note">분할수면 2시간 전 마감</span></div></div>
+      <div class="row"><div class="time-col">19:30–20:00</div><div class="block rest">🛁 취침 준비</div></div>
+      <div class="row"><div class="time-col">20:00–21:30</div><div class="block sleep2">😴 분할수면 <span class="note">1.5시간 (수면주기 1회)</span></div></div>
+      <div class="row"><div class="time-col">21:30–21:45</div><div class="block prep">🎒 출근 준비</div></div>
+      <div class="row"><div class="time-col">21:45–23:00</div><div class="block prep">🚌 출근 이동</div></div>
+    </div>
+    <div class="warn">⚠️ 야간 근무 전 운동 강도 70~80%로 낮추세요. 밤샘 체력 보존</div>
+    <div class="tip">💊 15:30 기상 후 첫 식사와 함께 약 복용</div>
+    <div class="tip">🕶 퇴근 귀가길 아침 햇빛 차단. 선글라스 착용 권장</div>
+    <div class="tip">😴 분할수면 90분은 수면주기 1회 완성 — 개운하게 기상 가능</div>
+  </div>
+
+  <!-- 주간 운동 -->
+  <div id="panel-week" class="panel">
+    <div class="stat-grid">
+      <div class="stat-card"><div class="stat-val">3회</div><div class="stat-lbl">주간 러닝 (5km × 3)</div></div>
+      <div class="stat-card"><div class="stat-val">2회</div><div class="stat-lbl">수영 화·목 (1시간)</div></div>
+      <div class="stat-card"><div class="stat-val">3회</div><div class="stat-lbl">근력 운동 (60분 이내)</div></div>
+      <div class="stat-card"><div class="stat-val">1일</div><div class="stat-lbl">완전 휴식 (일요일)</div></div>
+    </div>
+    <div class="week-grid">
+      <div class="wg-cell wg-head"></div>
+      <div class="wg-cell wg-head">월</div>
+      <div class="wg-cell wg-head">화</div>
+      <div class="wg-cell wg-head">수</div>
+      <div class="wg-cell wg-head">목</div>
+      <div class="wg-cell wg-head">금</div>
+      <div class="wg-cell wg-head">토</div>
+      <div class="wg-cell wg-head">일</div>
+      <div class="wg-cell wg-label">운동</div>
+      <div class="wg-cell"><span class="pill p-run">러닝</span><span class="pill p-lift">하체</span></div>
+      <div class="wg-cell"><span class="pill p-swim">수영</span></div>
+      <div class="wg-cell"><span class="pill p-lift">상체</span></div>
+      <div class="wg-cell"><span class="pill p-swim">수영</span></div>
+      <div class="wg-cell"><span class="pill p-run">러닝</span><span class="pill p-lift">전신</span></div>
+      <div class="wg-cell"><span class="pill p-run">야외러닝</span></div>
+      <div class="wg-cell"><span class="pill p-rest">휴식</span></div>
+      <div class="wg-cell wg-label">시간</div>
+      <div class="wg-cell" style="font-size:11px;color:#787774;">60분</div>
+      <div class="wg-cell" style="font-size:11px;color:#787774;">60분</div>
+      <div class="wg-cell" style="font-size:11px;color:#787774;">50~60분</div>
+      <div class="wg-cell" style="font-size:11px;color:#787774;">60분</div>
+      <div class="wg-cell" style="font-size:11px;color:#787774;">60분</div>
+      <div class="wg-cell" style="font-size:11px;color:#787774;">30~40분</div>
+      <div class="wg-cell" style="font-size:11px;color:#787774;">—</div>
+      <div class="wg-cell wg-label">세부</div>
+      <div class="wg-cell" style="font-size:10px;color:#787774;line-height:1.4;">스쿼트·런지·플랭크</div>
+      <div class="wg-cell" style="font-size:10px;color:#787774;">전신 저항·회복</div>
+      <div class="wg-cell" style="font-size:10px;color:#787774;">가슴·등·어깨</div>
+      <div class="wg-cell" style="font-size:10px;color:#787774;">상체 피로 이완</div>
+      <div class="wg-cell" style="font-size:10px;color:#787774;line-height:1.4;">케틀벨·풀업·푸시업</div>
+      <div class="wg-cell" style="font-size:10px;color:#787774;">야외 협응력</div>
+      <div class="wg-cell" style="font-size:10px;color:#787774;">수면·영양 보충</div>
+    </div>
+    <div class="section-label" style="margin-top:16px;">건강 주의사항</div>
+    <div class="tip">❤️ Zone 2 유산소 유지 — 대화 가능한 속도 6~8km/h, 고강도 인터벌 자제</div>
+    <div class="tip">💧 저혈압(97/55) + 서맥(46회/분) — 준비·마무리 걷기 각 5~10분 필수, 급정지 금지</div>
+    <div class="tip">💊 알파차단제 복용 중 — 어지럼증 시 즉시 속도 낮추고 앉아서 휴식</div>
+  </div>
+</div>
+
+<script>
+function show(id, btn) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('panel-' + id).classList.add('active');
+  btn.classList.add('active');
+}
+</script>
+</body>
+</html>
